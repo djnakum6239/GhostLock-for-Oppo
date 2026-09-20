@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch: # Allows you to manually trigger the build from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,19 +19,25 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r25c # Meets the r25+ requirement
+          ndk-version: r25c
           add-to-path: true
 
-      - name: Build with Make
+      - name: Build GhostLock Executable
         run: |
-          # Set the required NDK paths
-          export ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}
-          export ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}
+          # 1. Export required NDK home targets
+          export ANDROID_NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
+          export ANDROID_NDK_ROOT="${{ steps.setup-ndk.outputs.ndk-path }}"
           
-          # Force the use of the standard compiler binary and explicitly target API 34
+          # 2. Identify the NDK binary directory path
           TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           
-          make CC="$TOOLCHAIN_BIN/aarch64-linux-android-clang" CFLAGS="-target aarch64-linux-android34"
+          # 3. Create the symlink shortcut that the Makefile is forcing a lookup for
+          # This bridges the gap between NDK r25 toolchain names and the hardcoded Makefile logic
+          ln -sf "$TOOLCHAIN_BIN/aarch64-linux-android-clang" "$TOOLCHAIN_BIN/aarch64-linux-android34-clang"
+          
+          # 4. Trigger the build safely with the correct API flag parameter
+          make API=34
+
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
