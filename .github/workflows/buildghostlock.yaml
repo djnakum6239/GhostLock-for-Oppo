@@ -24,13 +24,14 @@ jobs:
 
       - name: Build with Make
         run: |
-          # The project requires ANDROID_NDK_HOME or ANDROID_NDK_ROOT to be set
+          # Set the required NDK paths
           export ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}
           export ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}
           
-          # Run the Makefile compilation
-          make API=34
-
+          # Force the use of the standard compiler binary and explicitly target API 34
+          TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          
+          make CC="$TOOLCHAIN_BIN/aarch64-linux-android-clang" CFLAGS="-target aarch64-linux-android34"
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
