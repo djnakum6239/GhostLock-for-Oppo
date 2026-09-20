@@ -1,0 +1,39 @@
+name: Build GhostLock
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows you to manually trigger the build from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c # Meets the r25+ requirement
+          add-to-path: true
+
+      - name: Build with Make
+        run: |
+          # The project requires ANDROID_NDK_HOME or ANDROID_NDK_ROOT to be set
+          export ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}
+          export ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}
+          
+          # Run the Makefile compilation
+          make API=34
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostlock-bin
+          path: ghostlock
+          
