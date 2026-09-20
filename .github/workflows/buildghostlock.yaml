@@ -24,20 +24,34 @@ jobs:
 
       - name: Build GhostLock Executable
         run: |
-          # 1. Map out the exact prebuilt path given by the NDK manager step
+          # 1. Map out structural NDK variables from the action runner
           export ANDROID_NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
           export ANDROID_NDK_ROOT="${{ steps.setup-ndk.outputs.ndk-path }}"
-          TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           
-          # 2. Patch the rigid path formula inside the Makefile directly
-          # This forces it to look for 'aarch64-linux-android-clang' natively
-          sed -i "s|\$(NDK_BIN)/aarch64-linux-android\$(API)-clang|\$(NDK_BIN)/aarch64-linux-android-clang|g" Makefile
+          # 2. Pinpoint the real LLVM binary tools directory
+          REAL_NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           
-          # 3. Inject the compilation target flag to strictly enforce Android 14 API 34 compatibility
-          sed -i 's/CFLAGS =/CFLAGS = --target=aarch64-linux-android34/g' Makefile
+          # 3. Build a dedicated, isolated bin directory inside our local runner workspace
+          mkdir -p "$GITHUB_WORKSPACE/compat_bin"
           
-          # 4. Safely compile the executable with the explicit binary directory assignment
-          make API=34 NDK_BIN="$TOOLCHAIN_BIN"
+          # 4. Populate the workspace with local symbolic links matching the entire toolchain array.
+          # This bridges the gap between NDK r25 naming and what the Makefile script demands.
+          ln -s "$REAL_NDK_BIN/aarch64-linux-android-clang" "$GITHUB_WORKSPACE/compat_bin/aarch64-linux-android34-clang"
+          
+          # 5. Mirror the rest of the standard LLVM utilities into our folder so the rest of the build layout compiles
+          for tool in ar strip ld ranlib objcopy; do
+            if [ -f "$REAL_NDK_BIN/llvm-$tool" ]; then
+              ln -s "$REAL_NDK_BIN/llvm-$tool" "$GITHUB_WORKSPACE/compat_bin/aarch64-linux-android-$tool"
+            elif [ -f "$REAL_NDK_BIN/$tool" ]; then
+              ln -s "$REAL_NDK_BIN/$tool" "$GITHUB_WORKSPACE/compat_bin/aarch64-linux-android-$tool"
+            fi
+          done
+          
+          # 6. Append our local compilation directory to the runner system path
+          export PATH="$GITHUB_WORKSPACE/compat_bin:$PATH"
+          
+          # 7. Execute make by explicitly injecting our local folder into the NDK_BIN variable
+          make API=34 NDK_BIN="$GITHUB_WORKSPACE/compat_bin"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
