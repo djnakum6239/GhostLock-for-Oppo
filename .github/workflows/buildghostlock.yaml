@@ -24,16 +24,20 @@ jobs:
 
       - name: Build GhostLock Executable
         run: |
-          # 1. Map out the NDK home path
+          # 1. Map out the exact prebuilt path given by the NDK manager step
           export ANDROID_NDK_HOME="${{ steps.setup-ndk.outputs.ndk-path }}"
           export ANDROID_NDK_ROOT="${{ steps.setup-ndk.outputs.ndk-path }}"
+          TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           
-          # 2. Extract the actual un-numbered wrapper location provided by Google
-          REAL_COMPILER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-clang"
+          # 2. Patch the rigid path formula inside the Makefile directly
+          # This forces it to look for 'aarch64-linux-android-clang' natively
+          sed -i "s|\$(NDK_BIN)/aarch64-linux-android\$(API)-clang|\$(NDK_BIN)/aarch64-linux-android-clang|g" Makefile
           
-          # 3. Force override the internal target variables on the make command line
-          # This forces line 24 of their Makefile to use the real compiler immediately.
-          make API=34 NDK_BIN="$(dirname $REAL_COMPILER)" CC="$REAL_COMPILER"
+          # 3. Inject the compilation target flag to strictly enforce Android 14 API 34 compatibility
+          sed -i 's/CFLAGS =/CFLAGS = --target=aarch64-linux-android34/g' Makefile
+          
+          # 4. Safely compile the executable with the explicit binary directory assignment
+          make API=34 NDK_BIN="$TOOLCHAIN_BIN"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
